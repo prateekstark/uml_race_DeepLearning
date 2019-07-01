@@ -1,0 +1,8 @@
+prefix=/home/stark/race_ws/devel
+
+Name: uml_race
+Description: Description of uml_race
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/stark/race_ws/devel/lib 
+Requires: 
