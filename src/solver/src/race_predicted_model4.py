@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 import roslib; roslib.load_manifest('uml_race')
 import math
-# from sklearn.externals import joblib
-# from sklearn.preprocessing import MinMaxScaler
 import rospy
 import numpy as np
 import math
@@ -12,13 +10,11 @@ from geometry_msgs.msg import Twist
 from keras.models import load_model
 
 class RaceSolver(object):
-    def __init__(self, model1, model2):
+    def __init__(self, model1):
         rospy.loginfo("Initialising solver node..")
         self.laserscan_sub = rospy.Subscriber('/robot/base_scan', LaserScan, self.laser_cb, queue_size=10)
         self.velocity_pub = rospy.Publisher('/robot/cmd_vel', Twist, latch=True, queue_size=10)
-        self.model1 = model1
-        self.model2 = model2
-        # self.scaler = scaler
+        self.model = model
         self.laser_data = None
         rospy.sleep(1.0)
         rospy.loginfo("all objects created")
@@ -38,36 +34,32 @@ class RaceSolver(object):
         g = self.laser_data.ranges[l/6]
         h = self.laser_data.ranges[2*l/3]
         i = self.laser_data.ranges[5*l/6]
-        X = [[b, c, d]]
+        X = [[a, g, b, f, c, h, d, i, e]]
         X = np.array(X)
-        pred_vel = self.model1.predict(X)
-        pred_ang_vel = self.model2.predict(X)
-        pred_vel = pred_vel*5
-        pred_ang_vel = pred_ang_vel*45*math.pi
-        # print y.
-        if(pred_vel > 5):
-            pred_vel = 5
-        # if(pred_ang_vel < 0.1):
-        #     pred_ang_vel = 0
-        if(pred_vel < 0.1):
-            pred_vel = 0
+        pred_ang_vel = self.model.predict(X)
+        pred_vel = 5
+        pred_ang_vel = pred_ang_vel*180*math.pi
+        # if(pred_vel > 5):
+        #     pred_vel = 5
+        if(pred_ang_vel < 0.1):
+            pred_ang_vel = 0
+        # if(pred_vel < 0.1):
+        #     pred_vel = 0
         velocity.linear.x = pred_vel
         velocity.angular.z = pred_ang_vel
-        print "Input ->" + str(b) + " " + str(c) + " " + str(d)
+        # print "Input ->" + str(b) + " " + str(c) + " " + str(d)
         print "speed: " + str(pred_vel) + " angular_velocity: " + str(pred_ang_vel)
         self.velocity_pub.publish(velocity)
 
     def run(self):
-        r = rospy.Rate(1)
+        r = rospy.Rate(60)
         while not rospy.is_shutdown():
             self.do_work()
             r.sleep()
         exit()
 
 
-model1 = load_model('uml_race_pred_velocity2.h5')
-model2 = load_model('uml_race_pred_angular_velocity2.h5')
-# scaler = joblib.load('scaler.save')
+model = load_model('uml_race_pred_best.h5')
 rospy.init_node('uml_solver')
-solver = RaceSolver(model1, model2)
+solver = RaceSolver(model)
 solver.run()

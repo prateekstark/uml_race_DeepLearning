@@ -22,30 +22,32 @@ class RaceSolver(object):
         velocity = Twist()
         l = len(self.laser_data.ranges)
         a = self.laser_data.ranges[0]
-        b = self.laser_data.ranges[l/4]
-        c = self.laser_data.ranges[l/2]
-        d = self.laser_data.ranges[3*l/4]
-        e = self.laser_data.ranges[l-1]
-        f = self.laser_data.ranges[l/3]
-        g = self.laser_data.ranges[l/6]
-        h = self.laser_data.ranges[2*l/3]
-        i = self.laser_data.ranges[5*l/6]
-        m = max(a,c,e,b,d)
+        b = self.laser_data.ranges[60]
+        c = self.laser_data.ranges[90]
+        d = self.laser_data.ranges[120]
+        e = self.laser_data.ranges[179]
+        f = self.laser_data.ranges[45]
+        g = self.laser_data.ranges[30]
+        h = self.laser_data.ranges[135]
+        i = self.laser_data.ranges[150]
+        m = max(a,c,b,e,d)
         if(m==a):
-            velocity.angular.z = -180*math.pi/2
-            velocity.linear.x = 1
+            velocity.angular.z = -180*math.pi 								#xxx
+            velocity.linear.x = 5
         if(m==b):
-            velocity.angular.z = -180*math.pi/4
-            velocity.linear.x = 1
+            velocity.angular.z = -180*math.pi								#xxx
+            velocity.linear.x = 5
         if(m==c):
             velocity.linear.x = 5
         if(m==d):
-            velocity.angular.z = 180*math.pi/4
-            velocity.linear.x = 1
+            velocity.angular.z = 180*math.pi
+            velocity.linear.x = 5
         if(m==e):
-            velocity.angular.z = 180*math.pi/2
-            velocity.linear.x = 1
+            velocity.angular.z = 180*math.pi
+            velocity.linear.x = 5
+        print velocity.angular.z
         self.outFileWriter.writerow([a, g, b, f, c, h, d, i, e, velocity.linear.x, velocity.angular.z])
+
         self.velocity_pub.publish(velocity)
 
     def run(self):
@@ -56,7 +58,7 @@ class RaceSolver(object):
         exit()
 
 
-outFile = open('output_file.csv', 'w+')
+outFile = open('output_file3.csv', 'w+')
 outFileWriter = csv.writer(outFile)
 outFileWriter.writerow(['0 degree', '30 degree', '45 degree', '60 degree', '90 degree', '120 degree','135 degree', '150 degree', '180 degree', 'velocity', 'angular_velocity'])
 rospy.init_node('uml_solver')
