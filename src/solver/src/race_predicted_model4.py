@@ -39,16 +39,13 @@ class RaceSolver(object):
         pred_ang_vel = self.model.predict(X)
         pred_vel = 5
         pred_ang_vel = pred_ang_vel*180*math.pi
-        # if(pred_vel > 5):
-        #     pred_vel = 5
-        if(pred_ang_vel < 0.1):
-            pred_ang_vel = 0
-        # if(pred_vel < 0.1):
-        #     pred_vel = 0
+
+        # if(pred_ang_vel < 1):
+        #     pred_ang_vel = 0
         velocity.linear.x = pred_vel
         velocity.angular.z = pred_ang_vel
         # print "Input ->" + str(b) + " " + str(c) + " " + str(d)
-        print "speed: " + str(pred_vel) + " angular_velocity: " + str(pred_ang_vel)
+        print "angular_velocity: " + str(pred_ang_vel)
         self.velocity_pub.publish(velocity)
 
     def run(self):
@@ -59,7 +56,7 @@ class RaceSolver(object):
         exit()
 
 
-model = load_model('uml_race_pred_best.h5')
+model = load_model('uml_race_pred_best_final.h5')
 rospy.init_node('uml_solver')
 solver = RaceSolver(model)
 solver.run()

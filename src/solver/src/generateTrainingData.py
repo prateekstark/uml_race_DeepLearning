@@ -58,7 +58,7 @@ class RaceSolver(object):
         exit()
 
 
-outFile = open('output_file3.csv', 'w+')
+outFile = open('output_file_final.csv', 'a+')
 outFileWriter = csv.writer(outFile)
 outFileWriter.writerow(['0 degree', '30 degree', '45 degree', '60 degree', '90 degree', '120 degree','135 degree', '150 degree', '180 degree', 'velocity', 'angular_velocity'])
 rospy.init_node('uml_solver')
