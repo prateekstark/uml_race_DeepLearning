@@ -2,6 +2,6 @@
 <launch>
     <node name="stage" pkg="stage_ros" type="stageros" required="true" ns="robot"
           args="$(find uml_race)/share/racetrack.world" />
-    <node name="referee" pkg="uml_race" type="referee.py" required="true" ns="robot"
-          output="screen" />
+  <node name="referee" pkg="uml_race" type="referee.py" required="true" ns="robot"
+      output="screen" />
 </launch>

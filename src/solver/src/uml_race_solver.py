@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import roslib; roslib.load_manifest('uml_race')
+# import roslib; roslib.load_manifest('uml_race')
 import rospy
 import math
 from sensor_msgs.msg import LaserScan
@@ -45,15 +45,17 @@ class RaceSolver(object):
 
 		self.velocity_pub.publish(velocity)
 
-	def run(self):
+	def run(self, epochs):
+		count = 0
+		# while(count < epochs):
 		r = rospy.Rate(60)
 		while not rospy.is_shutdown():
 			self.do_work()
-			r.sleep()
-
-
-
+				# r.sleep()
+			# rospy.wait(5.0)
+			# count += 1
+		# return None
 #if __name__ =='__main__':
 rospy.init_node('uml_solver')
 solver = RaceSolver()
-solver.run()
+solver.run(3)

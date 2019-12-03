@@ -7,7 +7,4 @@
 # new environment variables
 
 # modified environment variables
-export CMAKE_PREFIX_PATH="/home/stark/race_ws/devel:$CMAKE_PREFIX_PATH"
 export PWD="/home/stark/race_ws/build"
-export ROSLISP_PACKAGE_DIRECTORIES="/home/stark/race_ws/devel/share/common-lisp"
-export ROS_PACKAGE_PATH="/home/stark/race_ws/src:$ROS_PACKAGE_PATH"
