@@ -84,23 +84,22 @@ class Node(object):
 		return False
 
 class MCTS(object):
-	def __init__(self, root_ls, r, predictor, root_time, rollout):
+	def __init__(self, root_ls, r, predictor, root_time, rollout, isFinish, positive_reward_history):
 		self.root_node = Node(root_ls, root_time)
 		self.dt = r
 		self.predictor = predictor
 		self.root_time = root_time
 		self.num_rollout = 0
-		self.gamma = 0.9
 		self.rollout_NN = rollout
 		self.correction_list = []
+		self.finish = isFinish
+		self.positive_reward_history = positive_reward_history
 
 	def predict_move(self):
 		start_time = time.time()
 		temp_root = self.root_node
 		while(time.time() - start_time < 0.1):
-			node_to_explore = self.traverse(temp_root)
-			playout_result = self.playout(node_to_explore)
-			self.backpropagate(node_to_explore, playout_result)
+			self.traverse_and_backpropogate(temp_root)
 		if(len(temp_root.visited_children) == 3):
 			print(str(temp_root.visited_children[0].num_visits) + " " + str(temp_root.visited_children[0].get_ucb()))
 			print(str(temp_root.visited_children[1].num_visits) + " " + str(temp_root.visited_children[1].get_ucb()))
@@ -109,6 +108,18 @@ class MCTS(object):
 		action = np.zeros(3)
 		action[index] = 1
 		return action
+
+	def get_reward(self, new_state, collision, finish, curr_time):
+		reward = 0
+		if finish:
+			reward = 1
+		elif collision:
+			reward = -1
+		elif((int(curr_time)%2 == 0) and (int(curr_time) > 0)):
+			if(int(curr_time) not in self.positive_reward_history):
+				reward = 1
+				self.positive_reward_history.append(int(curr_time))
+		return reward
 
 	def expand_node(self, node):
 		zero_action = np.zeros(3)
@@ -123,44 +134,25 @@ class MCTS(object):
 			children_list.append(temp_node)
 		node.unvisited_children = children_list
 
-	def traverse(self, node):
+	def traverse_and_backpropogate(self, node):
 		while(node.fully_expanded()):
 			node, _ = node.best_child()
-			if(node.is_terminal()):
-				return node
 		if(node.is_no_children()):
 			self.expand_node(node)
-		child_node, index = node.pick_unvisited_children()
-		print(child_node.time_elapsed - self.root_node.time_elapsed)
-		node.visited_children.append(child_node)
-		node.unvisited_children.pop(index)
-		return child_node
+		expected_rewards = self.rollout_NN.predict(node.laser_data.reshape((1, 180)))[0]
+		node.visited_children = node.unvisited_children
+		node.unvisited_children = []
+		next_time = node.time_elapsed + self.dt
+		zero_action = np.zeros(3)
+		for i in range(3):
+			self.num_rollout += 1
+			temp_action = zero_action
+			temp_action[i] = 1
+			is_next_state_terminal = node.visited_children[i].is_terminal()
+			reward = self.get_reward(node.visited_children[i], is_next_state_terminal, self.finish, next_time)
+			self.correction_list.append((node.laser_data, temp_action, reward, node.visited_children[i], is_next_state_terminal, self.finish))
+			self.backpropagate(node.visited_children[i], expected_rewards[i])
 
-	def lookahead_one_step(self, node):
-		random_action = to_categorical(randint(0, 2), num_classes=3)
-		input_data = np.append(node.laser_data, random_action, axis=0)
-		temp_ls = self.predictor.predict(input_data.reshape((1, 183)))[0]
-		temp_node = Node(temp_ls, node.time_elapsed + self.dt)
-		temp_node.parent = node
-		return temp_node
-
-	def playout(self, node):
-		temp_node = node
-		for i in range(2):
-			if(temp_node.is_terminal()):
-				reward = -2*pow(self.gamma, i)
-				return reward
-			temp_node = self.lookahead_one_step(temp_node)
-		return self.rollout(temp_node)
-	
-	def rollout(self, node):
-		self.num_rollout += 1
-		# reward = self.rollout_NN.predict(node.laser_data.reshape((1, 180)))
-		# self.correction_list.append((node.laser_data, reward))
-		reward = np.amin(node.laser_data)
-		# print("reward is " + str(reward))
-		return reward
-    
 	def backpropagate(self, node, result):
 		node.num_visits += 1
 		if(self.is_root(node)):
@@ -172,3 +164,5 @@ class MCTS(object):
 		if(np.array_equal(self.root_node.laser_data, node.laser_data)):
 			return True
 		return False
+
+

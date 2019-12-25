@@ -76,7 +76,6 @@ class DQN(object):
 				return
 		else:
 			batch_size = int(0.12*(len(self.memory)))
-			# batch_size = 256
 			minibatch = random.sample(memory, batch_size)
 		X = []
 		y = []

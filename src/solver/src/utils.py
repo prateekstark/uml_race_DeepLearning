@@ -3,7 +3,7 @@ import numpy as np
 
 def normalize(v):
 	mean_val = 2.5
-	return (v - mean_val)/5.0
+	return (v - mean_val)/2.5
 
 def get_learning_rate(num_games):
 	if(num_games < 1000.0):

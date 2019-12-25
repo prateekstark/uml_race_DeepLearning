@@ -2,8 +2,7 @@
 import rospy
 import math
 from utils import *
-from MCTS import *
-from DQN import DQN
+from MCTS_DQN import *
 from random import randint
 from keras.utils import to_categorical
 from sensor_msgs.msg import LaserScan
@@ -25,8 +24,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 class RaceSolver(object):
 	def __init__(self):
 		rospy.loginfo("Initialising solver node..")
-		self.model = self.state_predictor_NN('temp_files_MCTS/state_predictor.h5')
-		self.rollout_model = self.rollout_NN('temp_files_MCTS/rollout_predictor.h5')
+		self.model = self.state_predictor_NN('temp_files_MCTS_DQN/state_predictor.h5')
+		self.rollout_model = self.rollout_NN('temp_files_MCTS_DQN/rollout_predictor.h5')
 		self.laser_data = None
 		self.finish = False
 		self.error = False
@@ -38,19 +37,29 @@ class RaceSolver(object):
 		self.counter_plot = []
 		self.game_number = 0
 		self.rate = 10
+		self.memory = []
+		self.positive_reward_history = []
+		self.gamma = 0.9
 		
 		try:
-			with open('temp_files_MCTS/counter_plot.pickle', 'rb') as fp:
+			with open('temp_files_MCTS_DQN/counter_plot.pickle', 'rb') as fp:
 				self.counter_plot = pickle.load(fp)
 		except:
 			self.counter_plot = []
 		
 		try:
-			f = open('temp_files_MCTS/game_number.txt', 'r')
+			f = open('temp_files_MCTS_DQN/game_number.txt', 'r')
 			self.game_number = int(f.readline())
 			f.close()
 		except:
 			self.game_number = 0
+
+		try:
+			with open('temp_files_MCTS_DQN/memory.pickle', 'rb') as fp:
+				self.memory = pickle.load(fp)
+		except:
+			print("The memory is not loaded properly...")
+			self.memory = []
 
 		rospy.sleep(1.0)
 		rospy.loginfo("all objects created...")
@@ -58,11 +67,11 @@ class RaceSolver(object):
 	def state_predictor_NN(self, weights=None):
 		model = Sequential()
 		model.add(Dense(180, input_dim=183, activation='relu'))
-		model.add(Dense(120, activation='relu'))
-		model.add(Dense(120, activation='relu'))
-		model.add(Dense(120, activation='relu'))
-		model.add(Dense(120, activation='relu'))
-		model.add(Dense(120, activation='relu'))
+		model.add(Dense(90, activation='relu'))
+		model.add(Dense(45, activation='relu'))
+		model.add(Dense(10, activation='relu'))
+		model.add(Dense(45, activation='relu'))
+		model.add(Dense(90, activation='relu'))
 		model.add(Dense(180, activation='tanh'))
 		model.compile(loss='mse', optimizer='adam', metrics=["mean_squared_error"])
 		if os.path.isfile(weights):
@@ -76,16 +85,67 @@ class RaceSolver(object):
 		model.add(Dense(units=10, activation='relu'))
 		model.add(Dense(units=10, activation='relu'))
 		model.add(Dense(units=10, activation='relu'))
-		model.add(Dense(units=3, activation='softmax'))
+		model.add(Dense(units=3, activation='linear'))
 		model.compile(loss='mse', optimizer='adam')
 		if os.path.isfile(weights):
 			model.load_weights(weights)
 		return model
 
+	def update_reward(self, curr_time):
+		if((int(curr_time)%2 == 0) and (int(curr_time) > 0)):
+			if(int(curr_time) not in self.positive_reward_history):
+				reward = 1
+				self.positive_reward_history.append(int(curr_time))
+
 	def fit_save_NN(self, X, y):
-		self.model.fit(X, y, epochs=1, verbose=1, batch_size=1)
-		self.model.save_weights('temp_files_MCTS/state_predictor.h5')
-	
+		self.model.fit(X, y, epochs=1, verbose=1)
+		self.model.save_weights('temp_files_MCTS_DQN/state_predictor.h5')
+
+	def fit_save_rollout_NN(self, episode_memory):
+		for i in range(len(episode_memory)):
+			(state, action, reward, next_state, error, finish) = episode_memory[i]
+			target = reward
+			target_f = self.rollout_model.predict(state.reshape((1, 180)))
+			if not (error or finish):
+				prediction = self.rollout_model.predict(next_state.laser_data.reshape((1, 180)))
+				target = reward + self.gamma * np.amax(prediction[0])
+			target_f[0][np.argmax(action)] = target
+			self.rollout_model.fit(state.reshape((1, 180)), target_f, epochs=1, verbose=0)
+
+	def experience_replay(self, memory):
+		batch_size = 32
+		if len(memory) < 300:
+			if len(memory) > 100:
+				minibatch = random.sample(memory, batch_size)
+			else:
+				return
+		else:
+			batch_size = int(0.12*(len(self.memory)))
+			minibatch = random.sample(memory, batch_size)
+		X = []
+		y = []
+		for state, action, reward, next_state, error, finish in minibatch:
+			target = reward
+			target_f = self.rollout_model.predict(state.reshape((1, 180)))
+			if not (error or finish):
+				prediction = self.rollout_model.predict(next_state.laser_data.reshape((1, 180)))
+				target = reward + self.gamma * np.amax(prediction[0])
+			target_f[0][np.argmax(action)] = target
+			X.append(state)
+			y.append(target_f[0])
+		X = np.array(X)
+		y = np.array(y)
+		self.rollout_model.fit(X.reshape((batch_size, 180)), y, epochs=1, verbose=0)
+
+	def write_memory(self, episode_memory):
+		for i in range(len(episode_memory)):
+			self.memory.append(episode_memory[i])
+			if(len(self.memory) > 50000):
+				coin_toss = randint(0, 50000)
+				del self.memory[coin_toss]
+		with open('temp_files_MCTS_DQN/memory.pickle', 'wb') as fp:
+			pickle.dump(self.memory, fp)
+
 	def do_move(self, final_move):
 		velocity = Twist()
 		velocity.linear.x = 5
@@ -124,37 +184,42 @@ class RaceSolver(object):
 	def run(self):
 		model = self.model
 		rollout = self.rollout_model
-		start_time = time.time()
 		rate = rospy.Rate(self.rate)
 		state_training_X = []
 		state_training_y = []
 		dt = 1.0/self.rate
+		episode_memory = []
+		start_time = time.time()
 		while not (self.error or self.finish):
 			state_old = self.get_state()
-			mcts = MCTS(state_old, dt, model, (time.time() - start_time), self.rollout_model)
+			mcts = MCTS(state_old, dt, model, (time.time() - start_time), rollout, self.finish, self.positive_reward_history)
 			prediction = mcts.predict_move()
 			self.do_move(prediction)
+			episode_memory = episode_memory + mcts.correction_list
 			print(prediction)
 			print("Number of rollout in one MCTS: " + str(mcts.num_rollout))
 			state_training_X.append(np.append(state_old, prediction, axis=0))
 			rate.sleep()
 			state_new = self.get_state()
+			self.update_reward(time.time() - start_time)
 			state_training_y.append(state_new)
-			print(min(state_new))
-			# print(state_new - state_old)
 		game_score = time.time() - start_time
 		print('Game', self.game_number, '    Time Elapsed:', game_score)
 		self.counter_plot.append(game_score)
-		with open('temp_files_MCTS/counter_plot.pickle', 'wb') as fp:
+		with open('temp_files_MCTS_DQN/counter_plot.pickle', 'wb') as fp:
 			pickle.dump(self.counter_plot, fp)
 		self.game_number += 1
-		f = open('temp_files_MCTS/game_number.txt','w')
+		f = open('temp_files_MCTS_DQN/game_number.txt','w')
 		f.write('{}'.format(self.game_number))
 		f.close()
 		state_training_X = np.array(state_training_X)
 		state_training_y = np.array(state_training_y)
 		self.fit_save_NN(state_training_X, state_training_y)
-rospy.init_node('uml_race_solver_MCTS')
+		self.write_memory(episode_memory)
+		self.fit_save_rollout_NN(episode_memory)
+		self.experience_replay(self.memory)
+		self.rollout_model.save_weights('temp_files_MCTS_DQN/rollout_predictor.h5')
+
+rospy.init_node('uml_race_solver_MCTS_DQN')
 solver = RaceSolver()
 solver.run()
-
